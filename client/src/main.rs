@@ -10,7 +10,7 @@ fn main() {
             .start(
                 "the_canvas_id",
                 web_options,
-                Box::new(|cc| Ok(Box::new(beer_game::TemplateApp::new(cc)))),
+                Box::new(|cc| Ok(Box::new(client::ClientApp::new(cc)))),
             )
             .await;
 

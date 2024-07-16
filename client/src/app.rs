@@ -1,5 +1,3 @@
-use crate::game;
-
 #[derive(PartialEq)]
 pub enum GameStyleChoice {
     NewSingleplayer,
@@ -7,13 +5,13 @@ pub enum GameStyleChoice {
     JoinMultiplayer
 }
 
-pub struct TemplateApp {
+pub struct ClientApp {
     // Example stuff:
     player_name: String,
     game_style: GameStyleChoice
 }
 
-impl Default for TemplateApp {
+impl Default for ClientApp {
     fn default() -> Self {
         Self {
             // Example stuff:
@@ -23,7 +21,7 @@ impl Default for TemplateApp {
     }
 }
 
-impl TemplateApp {
+impl ClientApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -33,7 +31,7 @@ impl TemplateApp {
     }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for ClientApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
