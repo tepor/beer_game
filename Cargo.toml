@@ -12,6 +12,8 @@ eframe = { version = "0.28", default-features = false, features = [
 log = "0.4"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3.4"
+chrono = "0.4.38"
+rocket = "0.5.1"
 
 [profile.release]
 opt-level = 2 # fast and small wasm

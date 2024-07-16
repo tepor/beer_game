@@ -1,19 +1,24 @@
-use eframe::WebLogger;
-use web_sys::console::log;
+use crate::game;
+
+#[derive(PartialEq)]
+pub enum GameStyleChoice {
+    NewSingleplayer,
+    NewMultiplayer,
+    JoinMultiplayer
+}
 
 pub struct TemplateApp {
     // Example stuff:
-    label: String,
-
-    value: f32,
+    player_name: String,
+    game_style: GameStyleChoice
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
             // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            player_name: "Player 1".to_owned(),
+            game_style: GameStyleChoice::NewSingleplayer,
         }
     }
 }
@@ -47,14 +52,17 @@ impl eframe::App for TemplateApp {
             ui.heading("The Beer Distribution Game");
 
             ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
+                ui.label("Your name: ");
+                ui.text_edit_singleline(&mut self.player_name);
             });
 
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
-                log::info!("value = {:?}", self.value);
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.game_style, GameStyleChoice::NewSingleplayer, "Singleplayer");
+                ui.selectable_value(&mut self.game_style, GameStyleChoice::NewMultiplayer, "Multiplayer");
+            });
+
+            if ui.button("Start game").clicked() {
+                log::info!("player_name = {:?}", self.player_name);
             }
 
             ui.separator();
