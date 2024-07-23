@@ -1,7 +1,6 @@
-use std::{cell::Cell, default, ops::{Index, IndexMut}};
+use std::ops::{Index, IndexMut};
 
 use chrono::{DateTime, Utc};
-use rocket::futures::io::Copy;
 
 
 #[derive(PartialEq)]
@@ -24,33 +23,34 @@ pub struct GameInfo {
 }
 
 pub struct GameSettings {
-    max_weeks: u32,
-    initial_request: u32,
-    stock_cost: u32,
-    deficit_cost: u32
+    pub max_weeks: u32,
+    pub initial_request: u32,
+    pub stock_cost: u32,
+    pub deficit_cost: u32
 }
 
 pub struct PlayerRequest {
-    role: PlayerRole,
-    request: u32,
+    pub role: PlayerRole,
+    pub request: u32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct PlayerState {
-    outgoing: u32,
-    incoming_request: u32,
-    outgoing_request: Option<u32>,
-    stock: u32,
-    deficit: u32,
-    incoming: u32,
-    costs: u32,
+    pub stock: u32,
+    pub deficit: u32,
+    pub incoming: u32,
+    pub outgoing: u32,
+    pub incoming_request: u32,
+    pub outgoing_request: Option<u32>,
+    pub costs: u32,
 }
 
+#[derive(Debug)]
 pub struct GameState {
-    week: u32,
-    game_end: bool,
-    players: [PlayerState; 4],
-    production: u32
+    pub week: u32,
+    pub game_end: bool,
+    pub players: [PlayerState; 4],
+    pub production: u32
 }
 
 // Lots of boilerplate to make this array indexable by an enum. Might just be an outdated habit of mine, but surely there is a nicer way to do this
@@ -90,38 +90,36 @@ impl GameState {
         self.players.iter().all(|r| r.outgoing_request.is_some())
     }
 
-    pub fn take_turn(&mut self, settings: GameSettings) -> GameState {
-        let mut players = self.players;
-
-        // Generate request for the first player
-        let customer_request = 5;
-
-        // Propagate requests
-        let mut carried_request = customer_request;
-        for mut p in players {
-            p.incoming_request = carried_request;
-            carried_request = p.outgoing_request.unwrap();
-        }
+    pub fn take_turn(&mut self, settings: &GameSettings) {
 
         // Warehouse incoming stock
-        for mut p in players {
+        for p in self.players.iter_mut() {
             p.stock += p.incoming;
         }
 
         // Move player's outgoing stock to the next player
         // First is the manufacturer receiving from production queue
         let mut carried_stock = self.production;
-        for mut p in players.into_iter().rev() {
+        for p in self.players.iter_mut().rev() {
             p.incoming = carried_stock;
             carried_stock = p.outgoing;
         }
 
         // Handle the manufacturers production queue
-        players[PlayerRole::Manufacturer].incoming = self.production;
-        self.production = players[PlayerRole::Manufacturer].outgoing_request.unwrap();
+        self.players[PlayerRole::Manufacturer].incoming = self.production;
+        self.production = self.players[PlayerRole::Manufacturer].outgoing_request.unwrap();
+
+        // Propagate requests
+        // Generate request for the first player
+        let customer_request = 8;
+        let mut carried_request = customer_request;
+        for p in self.players.iter_mut() {
+            p.incoming_request = carried_request;
+            carried_request = p.outgoing_request.unwrap();
+        }
 
         // Send out requested goods and calculate any deficit
-        for mut p in players {
+        for p in self.players.iter_mut() {
             let mut to_send = p.deficit + p.incoming_request;
             if to_send > p.stock {
                 p.deficit = to_send - p.stock;
@@ -132,16 +130,12 @@ impl GameState {
         }
 
         // Calculate costs
-        for mut p in players {
+        for p in self.players.iter_mut() {
             p.costs = p.stock * settings.stock_cost 
                     + p.deficit * settings.deficit_cost;
         }
 
-        GameState {
-            week: &self.week + 1,
-            game_end: self.week >= settings.max_weeks,
-            players: self.players,
-            production: self.production,
-        }
+        self.week += 1;
+        self.game_end = self.week >= settings.max_weeks;
     }
 }
