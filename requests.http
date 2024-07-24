@@ -1,0 +1,11 @@
+http://127.0.0.1:8000/gamestate
+
+###
+
+POST http://127.0.0.1:8000/submitrequest HTTP/1.1
+content-type: application/json
+
+{
+    "role": "Retailer",
+    "request": 3
+}

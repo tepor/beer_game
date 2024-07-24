@@ -1,9 +1,10 @@
 use std::ops::{Index, IndexMut};
 
 use chrono::{DateTime, Utc};
+use serde::{Serialize, Deserialize};
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize, Debug)]
 pub enum PlayerRole {
     Retailer,
     Wholesaler,
@@ -29,12 +30,13 @@ pub struct GameSettings {
     pub deficit_cost: u32
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct PlayerRequest {
     pub role: PlayerRole,
     pub request: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct PlayerState {
     pub stock: u32,
     pub deficit: u32,
@@ -45,7 +47,7 @@ pub struct PlayerState {
     pub costs: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GameState {
     pub week: u32,
     pub game_end: bool,
