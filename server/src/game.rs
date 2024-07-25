@@ -12,18 +12,15 @@ pub enum PlayerRole {
     Manufacturer
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct PlayerInfo {
     name: String,
     role: PlayerRole
 }
 
-pub struct GameInfo {
-    start_time: DateTime<Utc>,
-    name: String,
-    player_info: [Option<PlayerInfo>; 4],
-}
-
+#[derive(Serialize, Deserialize)]
 pub struct GameSettings {
+    pub name: String,
     pub max_weeks: u32,
     pub initial_request: u32,
     pub stock_cost: u32,
@@ -53,6 +50,11 @@ pub struct GameState {
     pub game_end: bool,
     pub players: [PlayerState; 4],
     pub production: u32
+}
+
+pub struct Game {
+    pub settings: GameSettings,
+    pub state: GameState,
 }
 
 // Lots of boilerplate to make this array indexable by an enum. Might just be an outdated habit of mine, but surely there is a nicer way to do this
@@ -113,7 +115,7 @@ impl GameState {
 
         // Propagate requests
         // Generate request for the first player
-        let customer_request = 8;
+        let customer_request = 1;
         let mut carried_request = customer_request;
         for p in self.players.iter_mut() {
             p.incoming_request = carried_request;

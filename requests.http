@@ -1,4 +1,4 @@
-http://127.0.0.1:8000/gamestate
+http://127.0.0.1:8000/gamestate/1
 
 ###
 
@@ -8,4 +8,17 @@ content-type: application/json
 {
     "role": "Retailer",
     "request": 3
+}
+
+###
+
+POST http://127.0.0.1:8000/creategame HTTP/1.1
+content-type: application/json
+
+{
+    "name": "secretgame",
+    "max_weeks": 5,
+    "initial_request": 4,
+    "stock_cost": 5,
+    "deficit_cost": 25
 }

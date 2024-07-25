@@ -1,0 +1,3 @@
+[default.databases.sqlite_games]
+# url = "sqlite::memory:"
+url = "db.sqlite"
