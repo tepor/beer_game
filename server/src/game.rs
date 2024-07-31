@@ -12,13 +12,13 @@ pub enum PlayerRole {
     Manufacturer
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerInfo {
     name: String,
     role: PlayerRole
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GameSettings {
     pub name: String,
     pub max_weeks: u32,
@@ -27,7 +27,7 @@ pub struct GameSettings {
     pub deficit_cost: u32
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerRequest {
     pub role: PlayerRole,
     pub request: u32,
@@ -52,9 +52,10 @@ pub struct GameState {
     pub production: u32
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Game {
     pub settings: GameSettings,
-    pub state: GameState,
+    pub states: Vec<GameState>,
 }
 
 // Lots of boilerplate to make this array indexable by an enum. Might just be an outdated habit of mine, but surely there is a nicer way to do this
@@ -141,5 +142,29 @@ impl GameState {
 
         self.week += 1;
         self.game_end = self.week >= settings.max_weeks;
+    }
+}
+
+impl Game {
+    pub fn new(settings: GameSettings) -> Game {
+        let initial_state = GameState {
+            week: 0,
+            game_end: false,
+            players: [PlayerState {
+                stock: settings.initial_request,
+                deficit: 0,
+                incoming: settings.initial_request,
+                outgoing: settings.initial_request,
+                incoming_request: settings.initial_request,
+                outgoing_request: None,
+                costs: 0,
+            }; 4],
+            production: settings.initial_request,
+        };
+
+        Game {
+            settings: settings,
+            states: vec![initial_state],
+        }
     }
 }
