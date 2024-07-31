@@ -21,15 +21,17 @@ async fn configure_db(rocket: Rocket<Build>) -> fairing::Result {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS games (
                     id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                    state TEXT
+                    state TEXT NOT NULL
                 )"
             ).execute(dbi).await.unwrap();
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS requests (
-                    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                    amount  INTEGER,
-                    game_id INTEGER,
-                    FOREIGN KEY(game_id) REFERENCES games(id)
+                    game_id INTEGER NOT NULL,
+                    week    INTEGER NOT NULL,
+                    role    INTEGER NOT NULL,
+                    amount  INTEGER NOT NULL,
+                    FOREIGN KEY (game_id) REFERENCES games (id),
+                    PRIMARY KEY (game_id, week, role)
                 )"
             ).execute(dbi).await.unwrap();
 
@@ -44,7 +46,7 @@ async fn configure_db(rocket: Rocket<Build>) -> fairing::Result {
 // Requests
 #[get("/gamestate/<id>", format="application/json")]
 async fn serve_gamestate(mut db: Connection<GamesDB>, id: i64) -> (Status, rocket::serde::json::Value) {
-    let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1 ORDER BY id ASC LIMIT 1")
+    let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1")
         .bind(id)
         .fetch_one(&mut **db)
         .await;
@@ -62,7 +64,7 @@ async fn create_game(mut db: Connection<GamesDB>, gs: Json<GameSettings>) -> (St
     let game = Game::new(gs);   
 
     // Insert game into DB and get the row ID
-    let result = sqlx::query_as::<_, (i64,)>("INSERT INTO games (state) VALUES (?) RETURNING id")
+    let result = sqlx::query_as::<_, (i64,)>("INSERT INTO games (state) VALUES ($1) RETURNING id")
         .bind(serde_json::to_string(&game).unwrap())
         .fetch_one(&mut **db)
         .await;
@@ -80,13 +82,63 @@ async fn create_game(mut db: Connection<GamesDB>, gs: Json<GameSettings>) -> (St
 }
 
 #[post("/submitrequest", format="application/json", data="<pr>")]
-async fn receive_request(mut db: Connection<GamesDB>, pr: Json<PlayerRequest>) {
-    println!("Player {:?} requested {:?}", pr.role, pr.request);
-    // Confused why a ? instead of .ok etc. doesnt work here. Also how to do the type specification manually
-    let result: (String,) = sqlx::query_as("SELECT name FROM games")
-        .fetch_one(&mut **db)
+async fn receive_request(mut db: Connection<GamesDB>, pr: Json<PlayerRequest>) -> Status {
+    // Submit the request to the DB
+    println!("Player {:?} requested {:?} in game {:?}", pr.role, pr.amount, pr.game_id);
+    let result = sqlx::query("INSERT OR IGNORE INTO requests (game_id, week, role, amount) VALUES ($1, $2, $3, $4)")
+        .bind(pr.game_id)
+        .bind(pr.week)
+        .bind(pr.role as u32)
+        .bind(pr.amount)
+        .execute(&mut **db)
+        .await;
+
+    match result {
+        Ok(v) => println!("{:?}", v),
+        Err(e) => { 
+            println!("Query failed: {:?}", e);
+            return Status::BadRequest
+        }
+    }
+
+    // Check to see if all requests are ready then step the game forward
+    // Get the current game week
+    let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1")
+    .bind(pr.game_id)
+    .fetch_one(&mut **db)
+    .await.ok().unwrap().0;
+
+    let mut game: Game = serde_json::from_str(&result).unwrap();
+    let week = game.get_current_week();
+
+    // Check we have all four requests for this week
+    let requests = sqlx::query_as::<_, (u32, u32)>("SELECT role, amount FROM requests WHERE game_id = $1 AND week = $2")
+        .bind(pr.game_id)
+        .bind(week)
+        .fetch_all(&mut **db)
         .await.ok().unwrap();
-    println!("Query result {:}", result.0);
+
+    if requests.len() == 4 {
+        // Plug in the request values
+        for (role, amount) in requests {
+            let role: PlayerRole = role.try_into().unwrap();
+            game.states.last_mut().unwrap().players[role].outgoing_request = Some(amount);
+        }
+
+        // Step the game forward
+        game.take_turn();
+
+        // Update the game state
+        sqlx::query("REPLACE INTO games (id, state) VALUES ($1, $2)")
+        .bind(pr.game_id)
+        .bind(serde_json::to_string(&game).unwrap())
+        .execute(&mut **db)
+        .await.ok().unwrap();
+
+        println!("Game {:?} took a step to week {:?}", pr.game_id, week + 1);
+    }
+
+    Status::Ok
 }
 
 #[launch]

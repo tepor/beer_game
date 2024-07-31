@@ -2,16 +2,6 @@ http://127.0.0.1:8000/gamestate/1
 
 ###
 
-POST http://127.0.0.1:8000/submitrequest HTTP/1.1
-content-type: application/json
-
-{
-    "role": "Retailer",
-    "request": 3
-}
-
-###
-
 POST http://127.0.0.1:8000/creategame HTTP/1.1
 content-type: application/json
 
@@ -21,4 +11,52 @@ content-type: application/json
     "initial_request": 4,
     "stock_cost": 5,
     "deficit_cost": 25
+}
+
+###
+
+POST http://127.0.0.1:8000/submitrequest HTTP/1.1
+content-type: application/json
+
+{
+    "game_id": 1,
+    "week": 0,
+    "role": "Retailer",
+    "amount": 2
+}
+
+###
+
+POST http://127.0.0.1:8000/submitrequest HTTP/1.1
+content-type: application/json
+
+{
+    "game_id": 1,
+    "week": 0,
+    "role": "Wholesaler",
+    "amount": 10
+}
+
+###
+
+POST http://127.0.0.1:8000/submitrequest HTTP/1.1
+content-type: application/json
+
+{
+    "game_id": 1,
+    "week": 0,
+    "role": "Distributor",
+    "amount": 3
+}
+
+###
+
+POST http://127.0.0.1:8000/submitrequest HTTP/1.1
+content-type: application/json
+
+{
+    "game_id": 1,
+    "week": 0,
+    "role": "Manufacturer",
+    "amount": 8
 }

@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 
 
-#[derive(PartialEq, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum PlayerRole {
     Retailer,
     Wholesaler,
@@ -29,8 +29,10 @@ pub struct GameSettings {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerRequest {
+    pub game_id: i64,
+    pub week: u32,
     pub role: PlayerRole,
-    pub request: u32,
+    pub amount: u32,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -44,7 +46,7 @@ pub struct PlayerState {
     pub costs: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct GameState {
     pub week: u32,
     pub game_end: bool,
@@ -56,6 +58,20 @@ pub struct GameState {
 pub struct Game {
     pub settings: GameSettings,
     pub states: Vec<GameState>,
+}
+
+impl TryFrom<u32> for PlayerRole {
+    type Error = ();
+    
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            role if role == PlayerRole::Retailer as u32 => Ok(PlayerRole::Retailer),
+            role if role == PlayerRole::Wholesaler as u32 => Ok(PlayerRole::Wholesaler),
+            role if role == PlayerRole::Distributor as u32 => Ok(PlayerRole::Distributor),
+            role if role == PlayerRole::Manufacturer as u32 => Ok(PlayerRole::Manufacturer),
+            _ => Err(())
+        }
+    }
 }
 
 // Lots of boilerplate to make this array indexable by an enum. Might just be an outdated habit of mine, but surely there is a nicer way to do this
@@ -85,7 +101,7 @@ impl IndexMut<PlayerRole> for [PlayerState] {
 
 impl GameState {
     pub fn receive_request(&mut self, request: PlayerRequest) {
-        self.players[request.role].outgoing_request = Some(request.request);
+        self.players[request.role].outgoing_request = Some(request.amount);
     }
 
     // Unsure how but could make this return a "ready" game state as opposed to a None to enforce type-level correctness
@@ -95,36 +111,38 @@ impl GameState {
         self.players.iter().all(|r| r.outgoing_request.is_some())
     }
 
-    pub fn take_turn(&mut self, settings: &GameSettings) {
+    pub fn take_turn(self, settings: &GameSettings) -> GameState {
+
+        let mut state = self;
 
         // Warehouse incoming stock
-        for p in self.players.iter_mut() {
+        for p in state.players.iter_mut() {
             p.stock += p.incoming;
         }
 
         // Move player's outgoing stock to the next player
         // First is the manufacturer receiving from production queue
-        let mut carried_stock = self.production;
-        for p in self.players.iter_mut().rev() {
+        let mut carried_stock = state.production;
+        for p in state.players.iter_mut().rev() {
             p.incoming = carried_stock;
             carried_stock = p.outgoing;
         }
 
         // Handle the manufacturers production queue
-        self.players[PlayerRole::Manufacturer].incoming = self.production;
-        self.production = self.players[PlayerRole::Manufacturer].outgoing_request.unwrap();
+        state.players[PlayerRole::Manufacturer].incoming = state.production;
+        state.production = state.players[PlayerRole::Manufacturer].outgoing_request.unwrap();
 
         // Propagate requests
         // Generate request for the first player
         let customer_request = 1;
         let mut carried_request = customer_request;
-        for p in self.players.iter_mut() {
+        for p in state.players.iter_mut() {
             p.incoming_request = carried_request;
             carried_request = p.outgoing_request.unwrap();
         }
 
         // Send out requested goods and calculate any deficit
-        for p in self.players.iter_mut() {
+        for p in state.players.iter_mut() {
             let mut to_send = p.deficit + p.incoming_request;
             if to_send > p.stock {
                 p.deficit = to_send - p.stock;
@@ -135,13 +153,15 @@ impl GameState {
         }
 
         // Calculate costs
-        for p in self.players.iter_mut() {
+        for p in state.players.iter_mut() {
             p.costs = p.stock * settings.stock_cost 
                     + p.deficit * settings.deficit_cost;
         }
 
-        self.week += 1;
-        self.game_end = self.week >= settings.max_weeks;
+        state.week += 1;
+        state.game_end = state.week >= settings.max_weeks;
+
+        state
     }
 }
 
@@ -150,7 +170,7 @@ impl Game {
         let initial_state = GameState {
             week: 0,
             game_end: false,
-            players: [PlayerState {
+            players: [PlayerState { 
                 stock: settings.initial_request,
                 deficit: 0,
                 incoming: settings.initial_request,
@@ -166,5 +186,17 @@ impl Game {
             settings: settings,
             states: vec![initial_state],
         }
+    }
+
+    pub fn get_current_week(&self) -> u32 {
+        match &self.states.last() {
+            Some(s) => s.week,
+            None => 0,
+        }
+    }
+
+    pub fn take_turn(&mut self) {
+        let state = self.states.last().unwrap().take_turn(&self.settings);
+        self.states.push(state);
     }
 }
