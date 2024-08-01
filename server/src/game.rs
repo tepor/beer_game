@@ -168,7 +168,7 @@ impl GameState {
 impl Game {
     pub fn new(settings: GameSettings) -> Game {
         let initial_state = GameState {
-            week: 0,
+            week: 1,
             game_end: false,
             players: [PlayerState { 
                 stock: settings.initial_request,
@@ -191,7 +191,7 @@ impl Game {
     pub fn get_current_week(&self) -> u32 {
         match &self.states.last() {
             Some(s) => s.week,
-            None => 0,
+            None => 1,
         }
     }
 

@@ -44,6 +44,41 @@ async fn configure_db(rocket: Rocket<Build>) -> fairing::Result {
 
 
 // Requests
+#[get("/games", format="application/json")]
+async fn serve_games(mut db: Connection<GamesDB>) -> (Status, rocket::serde::json::Value) {
+    let result = sqlx::query_as::<_, (i64, String)>("SELECT id, state FROM games")
+        .fetch_all(&mut **db)
+        .await;
+
+    match result {
+        Ok(v) => {
+            let names: Vec<(i64, String)> = v.into_iter().map(|s| {
+                let game = serde_json::from_str::<Game>(&s.1).unwrap();
+                (s.0, game.settings.name)
+            }).collect();
+            (Status::Ok, serde_json::json!(names))
+        }
+        Err(_) => (Status::BadRequest, serde_json::json!(None::<String>))
+    }
+}
+
+#[get("/gameweek/<id>", format="application/json")]
+async fn serve_gameweek(mut db: Connection<GamesDB>, id: i64) -> (Status, rocket::serde::json::Value) {
+    let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1")
+        .bind(id)
+        .fetch_one(&mut **db)
+        .await;
+
+    match result {
+        Ok(v) => {
+            let game = serde_json::from_str::<Game>(&v.0).unwrap();
+            let week = game.get_current_week();
+            (Status::Ok, serde_json::json!(week))
+        },
+        Err(_) => (Status::BadRequest, serde_json::json!(None::<u32>))
+    }
+}
+
 #[get("/gamestate/<id>", format="application/json")]
 async fn serve_gamestate(mut db: Connection<GamesDB>, id: i64) -> (Status, rocket::serde::json::Value) {
     let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1")
@@ -146,5 +181,9 @@ fn rocket() -> _ {
     rocket::build()
         .attach(GamesDB::init())
         .attach(AdHoc::try_on_ignite("DB Configuration", configure_db))
-        .mount("/", routes![create_game, serve_gamestate, receive_request])
+        .mount("/", routes![serve_games,
+                            serve_gameweek,
+                            serve_gamestate,
+                            create_game,
+                            receive_request])
 }
