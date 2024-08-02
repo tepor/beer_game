@@ -16,13 +16,13 @@ impl PlayerRole {
                                 PlayerRole::Manufacturer];
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerInfo {
     pub name: String,
     pub role: PlayerRole
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GameSettings {
     pub name: String,
     pub max_weeks: u32,
@@ -66,7 +66,7 @@ pub struct GameListing {
     pub available_roles: Vec<PlayerRole>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Game {
     pub settings: GameSettings,
     pub states: Vec<GameState>,
