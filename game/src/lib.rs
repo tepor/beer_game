@@ -1,10 +1,7 @@
-use std::ops::{Index, IndexMut};
-
-use chrono::{DateTime, Utc};
+use std::{collections::HashMap, ops::{Index, IndexMut}};
 use serde::{Serialize, Deserialize};
 
-
-#[derive(PartialEq, Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone, Copy, Eq, Hash)]
 pub enum PlayerRole {
     Retailer,
     Wholesaler,
@@ -12,10 +9,17 @@ pub enum PlayerRole {
     Manufacturer
 }
 
+impl PlayerRole {
+    const ROLES: [Self; 4] = [  PlayerRole::Retailer, 
+                                PlayerRole::Wholesaler, 
+                                PlayerRole::Distributor, 
+                                PlayerRole::Manufacturer];
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerInfo {
-    name: String,
-    role: PlayerRole
+    pub name: String,
+    pub role: PlayerRole
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,7 +28,8 @@ pub struct GameSettings {
     pub max_weeks: u32,
     pub initial_request: u32,
     pub stock_cost: u32,
-    pub deficit_cost: u32
+    pub deficit_cost: u32,
+    pub players: HashMap<PlayerRole, Option<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,6 +57,13 @@ pub struct GameState {
     pub game_end: bool,
     pub players: [PlayerState; 4],
     pub production: u32
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GameListing {
+    pub id: i64,
+    pub name: String,
+    pub available_roles: Vec<PlayerRole>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -198,5 +210,13 @@ impl Game {
     pub fn take_turn(&mut self) {
         let state = self.states.last().unwrap().take_turn(&self.settings);
         self.states.push(state);
+    }
+
+    pub fn get_available_roles(&self) -> Vec<PlayerRole> {
+        let mut roles = vec![];
+        for role in PlayerRole::ROLES {
+            if self.settings.players.get(&role).unwrap().is_none() { roles.push(role) };
+        }
+        roles
     }
 }

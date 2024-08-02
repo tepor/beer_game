@@ -7,12 +7,17 @@ edition = "2021"
 forced-target = "wasm32-unknown-unknown"
 
 [dependencies]
+game = { path = "../game" }
 egui = "0.28"
 eframe = { version = "0.28", default-features = false, features = [
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
 ] }
+ehttp = { version = "0.5.0", features = ["json"] }
 log = "0.4"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3.4"
 getrandom = { version = "0.2", features = ["js"] }
+serde_json = "1.0.120"
+egui_extras = "0.28.1"
+

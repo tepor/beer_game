@@ -1,5 +1,5 @@
 [workspace] 
-members = ["client","server"]
+members = ["game", "client", "server"]
 resolver = "1"
 
 [profile.release]

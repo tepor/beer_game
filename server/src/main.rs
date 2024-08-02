@@ -1,12 +1,42 @@
 
-use server::game::{GameSettings, GameState, PlayerRequest, PlayerRole, PlayerState, Game};
+use game::{Game, GameListing, GameSettings, PlayerInfo, PlayerRequest, PlayerRole};
 
 #[macro_use] extern crate rocket;
 use rocket_db_pools::{sqlx::{self}, Connection, Database};
-use rocket::fairing::{self, AdHoc};
+use rocket::fairing::{self, Fairing, AdHoc, Info, Kind};
 use rocket::{Rocket, Build};
 use rocket::http::Status;
 use rocket::serde::json::Json;
+
+// CORS
+pub struct CORS;
+
+#[rocket::async_trait]
+impl Fairing for CORS {
+    fn info(&self) -> Info {
+        Info {
+            name: "Add CORS headers to responses",
+            kind: Kind::Response
+        }
+    }
+
+    async fn on_response<'r>(&self, request: &'r rocket::Request<'_>, response: &mut rocket::Response<'r>) {
+        response.set_header(rocket::http::Header::new("Access-Control-Allow-Origin", "*"));
+        response.set_header(rocket::http::Header::new("Access-Control-Allow-Methods", "GET, POST, OPTIONS"));
+        response.set_header(rocket::http::Header::new("Access-Control-Allow-Headers", "Content-Type"));
+        response.set_header(rocket::http::Header::new("Access-Control-Request-Method", "GET, POST, OPTIONS"));
+
+        // Handle preflight OPTIONS requests
+        // COuld perhaps do this with a wildcard options matcher
+        if request.method() == rocket::http::Method::Options {
+            let body = "";
+            response.set_header(rocket::http::ContentType::Plain);
+            response.set_sized_body(body.len(), std::io::Cursor::new(body));
+            response.set_status(Status::Ok);
+        }
+    }
+}
+
 
 // Database tools
 #[derive(Database)]
@@ -42,9 +72,8 @@ async fn configure_db(rocket: Rocket<Build>) -> fairing::Result {
     }
 }
 
-
 // Requests
-#[get("/games", format="application/json")]
+#[get("/games")]
 async fn serve_games(mut db: Connection<GamesDB>) -> (Status, rocket::serde::json::Value) {
     let result = sqlx::query_as::<_, (i64, String)>("SELECT id, state FROM games")
         .fetch_all(&mut **db)
@@ -52,17 +81,20 @@ async fn serve_games(mut db: Connection<GamesDB>) -> (Status, rocket::serde::jso
 
     match result {
         Ok(v) => {
-            let names: Vec<(i64, String)> = v.into_iter().map(|s| {
+            let listings: Vec<GameListing> = v.into_iter().map(|s| {
                 let game = serde_json::from_str::<Game>(&s.1).unwrap();
-                (s.0, game.settings.name)
+                GameListing {   id: s.0, 
+                                name: game.settings.name.clone(),
+                                available_roles: game.get_available_roles(),
+                            }
             }).collect();
-            (Status::Ok, serde_json::json!(names))
+            (Status::Ok, serde_json::json!(listings))
         }
-        Err(_) => (Status::BadRequest, serde_json::json!(None::<String>))
+        Err(_) => (Status::BadRequest, serde_json::json!(None::<GameListing>))
     }
 }
 
-#[get("/gameweek/<id>", format="application/json")]
+#[get("/gameweek/<id>")]
 async fn serve_gameweek(mut db: Connection<GamesDB>, id: i64) -> (Status, rocket::serde::json::Value) {
     let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1")
         .bind(id)
@@ -79,7 +111,7 @@ async fn serve_gameweek(mut db: Connection<GamesDB>, id: i64) -> (Status, rocket
     }
 }
 
-#[get("/gamestate/<id>", format="application/json")]
+#[get("/gamestate/<id>")]
 async fn serve_gamestate(mut db: Connection<GamesDB>, id: i64) -> (Status, rocket::serde::json::Value) {
     let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1")
         .bind(id)
@@ -114,6 +146,43 @@ async fn create_game(mut db: Connection<GamesDB>, gs: Json<GameSettings>) -> (St
             (Status::BadRequest, serde_json::json!(None::<i64>))
         }
     }
+}
+
+#[post("/joingame/<id>", format="application/json", data="<pi>")]
+async fn join_game(mut db: Connection<GamesDB>, id: i64, pi: Json<PlayerInfo>) -> (Status, rocket::serde::json::Value) {
+    let pi = pi.into_inner();
+    // Check to see whether that role is still available
+    // Not contention safe, but little of this is without breaking everything down into the DB
+    // Fetch the game, check the players, insert if available, then update state and send it to the client
+    // Fetch game
+    let result = sqlx::query_as::<_, (String,)>("SELECT state FROM games WHERE id = $1")
+    .bind(id)
+    .fetch_one(&mut **db)
+    .await;
+
+    match &result {
+        Ok(_) => (),
+        Err(_) => return (Status::BadRequest, serde_json::json!(None::<Game>))
+    }
+    let mut game = serde_json::from_str::<Game>(&result.unwrap().0).unwrap();
+
+    // Check the existing player roles
+    if game.settings.players.get(&pi.role).unwrap().is_none() {
+        // Insert player
+        // Since the hashmap support simply not having an entry for a given key, the Option<String> in there is very overkill
+        game.settings.players.insert(pi.role, Some(pi.name));
+    } else {
+        return (Status::BadRequest, serde_json::json!(None::<Game>))
+    }
+
+    // Update state in DB
+    sqlx::query("REPLACE INTO games (id, state) VALUES ($1, $2)")
+    .bind(id)
+    .bind(serde_json::to_string(&game).unwrap())
+    .execute(&mut **db)
+    .await.ok().unwrap();
+
+    (Status::Ok, serde_json::json!(game))
 }
 
 #[post("/submitrequest", format="application/json", data="<pr>")]
@@ -181,9 +250,11 @@ fn rocket() -> _ {
     rocket::build()
         .attach(GamesDB::init())
         .attach(AdHoc::try_on_ignite("DB Configuration", configure_db))
+        .attach(CORS)
         .mount("/", routes![serve_games,
                             serve_gameweek,
                             serve_gamestate,
                             create_game,
+                            join_game,
                             receive_request])
 }

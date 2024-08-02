@@ -12,7 +12,19 @@ content-type: application/json
     "max_weeks": 5,
     "initial_request": 4,
     "stock_cost": 5,
-    "deficit_cost": 25
+    "deficit_cost": 25,
+    "players": {"Distributor": "Jeff",
+                "Manufacturer": null,
+                "Retailer": null,
+                "Wholesaler": null}
+}
+###
+POST http://127.0.0.1:8000/joingame/1 HTTP/1.1
+content-type: application/json
+
+{
+    "name": "Tim",
+    "role": "Wholesaler"
 }
 ###
 POST http://127.0.0.1:8000/submitrequest HTTP/1.1
